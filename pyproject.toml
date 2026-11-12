@@ -5,9 +5,11 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "rk3588-common"
 version = "0.0.0"
-description = "Pre/post-processing shared by PC and board for RK3588 PPE detection"
-requires-python = ">=3.12,<3.13"
-dependencies = ["numpy"]
+description = "Contracts shared by PC and board for RK3588 PPE detection"
+requires-python = ">=3.10"  # the board runs Python 3.10
+# opencv-python, not -headless: on the PC ultralytics already installs opencv-python and two cv2 distributions
+# would overwrite each other. The board gets opencv-python-headless of the same version from rk3588-deploy.
+dependencies = ["numpy", "opencv-python"]
 
 [tool.setuptools.packages.find]
 where = ["python"]
