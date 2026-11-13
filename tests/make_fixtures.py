@@ -62,7 +62,7 @@ def main() -> None:
                 outs = list(cases.split_outputs(reg_max))
                 out[f"split{reg_max}_m{m}_c{c}"] = old.postprocess_raw(outs, meta, False, split=True, conf_thres=conf)
     for reg_max in (16, 1):
-        out[f"dec{reg_max}_sha"] = np.array(cases.digest(old_split.decode_split(*cases.split_outputs(reg_max))))
+        out[f"dec{reg_max}"] = old_split.decode_split(*cases.split_outputs(reg_max))
     pts, st = old_split.anchors_and_strides()
     out["anchors_sha"] = np.array(cases.digest(pts) + cases.digest(st))
     out["nms"] = old.nms_xyxy(*cases.nms_inputs(), old.IOU)

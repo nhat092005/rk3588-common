@@ -9,6 +9,14 @@ from rk3588_common import model_io as io
 EXPECTED = np.load(cases.EXPECTED)
 
 
+def assert_close_detections(got, expected):
+    """Same detections in the same order and class, boxes and scores within the exp tolerances of cases."""
+    assert got.shape == expected.shape
+    assert np.array_equal(got[:, 5], expected[:, 5])
+    np.testing.assert_allclose(got[:, :4], expected[:, :4], rtol=0, atol=cases.BOX_ATOL)
+    np.testing.assert_allclose(got[:, 4], expected[:, 4], rtol=0, atol=cases.SCORE_ATOL)
+
+
 @pytest.mark.parametrize("i", range(len(cases.IMAGE_SHAPES)))
 def test_preprocess(i):
     x, meta = io.preprocess(cases.images()[i])
@@ -30,7 +38,7 @@ def test_postprocess(m, c):
     for reg_max in (16, 1):
         outs = list(cases.split_outputs(reg_max))
         got = io.postprocess_raw(outs, meta, False, split=True, conf_thres=conf)
-        assert np.array_equal(got, EXPECTED[f"split{reg_max}_m{m}_c{c}"])
+        assert_close_detections(got, EXPECTED[f"split{reg_max}_m{m}_c{c}"])
 
 
 def test_fixtures_are_not_trivial():
@@ -41,7 +49,11 @@ def test_fixtures_are_not_trivial():
 
 @pytest.mark.parametrize("reg_max", [16, 1])
 def test_decode_split(reg_max):
-    assert cases.digest(io.decode_split(*cases.split_outputs(reg_max))) == str(EXPECTED[f"dec{reg_max}_sha"])
+    got = io.decode_split(*cases.split_outputs(reg_max))
+    expected = EXPECTED[f"dec{reg_max}"]
+    assert got.dtype == expected.dtype and got.shape == expected.shape
+    np.testing.assert_allclose(got[:, :4], expected[:, :4], rtol=0, atol=cases.BOX_ATOL)
+    np.testing.assert_allclose(got[:, 4:], expected[:, 4:], rtol=0, atol=cases.SCORE_ATOL)
 
 
 def test_anchors_and_strides():

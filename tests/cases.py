@@ -15,6 +15,11 @@ IMAGE_SHAPES = [(640, 640), (480, 640), (1080, 1920), (200, 300), (1000, 750), (
 # (gain, pad_left, pad_top, w0, h0) as returned by preprocess: a square 640 image and a 1280x720 frame
 METAS = [(1.0, 0, 0, 640, 640), (0.5, 0, 140, 1280, 720)]
 CONFS = [0.25, 0.001]
+# np.exp on float32 differs by a few ulp between x86 and aarch64 numpy builds (multiply and divide do not). Measured on
+# the board 2026-11-13: decode_split boxes differ by up to 1.2e-4 px, scores by up to 1.2e-7. Outputs that go through
+# exp (decode_split, split postprocess) are compared with these absolute tolerances, every other output exactly.
+BOX_ATOL = 1e-3  # pixels
+SCORE_ATOL = 1e-6
 LIST_FILES = ["b.jpg", "a.PNG", "c.jpeg", "d.bmp", "e.txt", "f.JPG", "g.webp", "h"]
 
 
