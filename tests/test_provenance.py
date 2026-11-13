@@ -3,6 +3,7 @@
 import argparse
 import hashlib
 import subprocess
+from pathlib import Path
 
 import pytest
 
@@ -48,6 +49,13 @@ def test_repo_state_dirty_only_inside_pathspec(repo):
 def test_repo_state_outside_git(tmp_path):
     prov._repo_state.cache_clear()
     assert prov.repo_state(tmp_path) == {"commit": "unknown", "dirty": True}
+
+
+def test_common_state_is_this_checkout():
+    root = Path(prov.__file__).resolve().parents[2]
+    state = prov.common_state()
+    assert state["commit"] == head(root)
+    assert (root / "python" / "rk3588_common" / "provenance.py").exists()
 
 
 def test_file_sha256(tmp_path):

@@ -37,6 +37,11 @@ def _repo_state(path: str, pathspec: tuple[str, ...]) -> tuple[str, bool]:
     return commit.strip(), bool(status.strip())
 
 
+def common_state() -> dict:
+    """repo_state of rk3588-common itself, dirty only for its code (python/), not its tests or docs."""
+    return repo_state(Path(__file__).resolve().parents[2], ("python",))
+
+
 def file_sha256(path: str | Path) -> str:
     h = hashlib.sha256()
     with open(path, "rb") as fh:
