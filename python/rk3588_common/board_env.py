@@ -1,6 +1,8 @@
-"""Board telemetry for result files: frequencies, temperatures, system info, resource use, latency summary.
+"""Board telemetry for result files.
 
-Reads Linux sysfs and procfs. On the PC the RK3588 nodes are missing and the values are None.
+Collects frequencies, temperatures, system info, resource use, and
+latency summary from Linux sysfs and procfs. On the PC the RK3588 nodes
+are missing and the values are None.
 """
 
 from __future__ import annotations
@@ -16,6 +18,7 @@ import psutil
 
 
 def summarize(values_ms: list[float]) -> dict:
+    """Return mean, p50, p95, std, and count for latency samples."""
     a = np.asarray(values_ms)
     return {
         "mean": round(float(a.mean()), 3),
@@ -27,6 +30,7 @@ def summarize(values_ms: list[float]) -> dict:
 
 
 def read_text(path: str) -> str | None:
+    """Read stripped text from a file path, or None on OSError."""
     try:
         return Path(path).read_text().strip()
     except OSError:
@@ -34,6 +38,7 @@ def read_text(path: str) -> str | None:
 
 
 def thermal_zone(name: str = "npu-thermal") -> Path | None:
+    """Find the sysfs thermal_zone directory matching the given type."""
     for zone in Path("/sys/class/thermal").glob("thermal_zone*"):
         if read_text(str(zone / "type")) == name:
             return zone
@@ -41,27 +46,40 @@ def thermal_zone(name: str = "npu-thermal") -> Path | None:
 
 
 def temperature_c(zone: Path | None) -> float | None:
+    """Read temperature in degrees Celsius from a thermal zone path."""
     raw = read_text(str(zone / "temp")) if zone else None
     return round(int(raw) / 1000, 1) if raw else None
 
 
 def frequency_state() -> dict:
-    """Governor and current frequency of CPU clusters, NPU and DDR (RKNPU2 User Guide p.72-73)."""
+    """Governor and current frequency of CPU clusters, NPU, and DDR."""
     state = {}
-    for policy in sorted(Path("/sys/devices/system/cpu/cpufreq").glob("policy*")):
+    for policy in sorted(
+        Path("/sys/devices/system/cpu/cpufreq").glob("policy*")
+    ):
         state[policy.name] = {
             "governor": read_text(str(policy / "scaling_governor")),
             "cur_khz": read_text(str(policy / "scaling_cur_freq")),
         }
     for name, node in (("npu", "fdab0000.npu"), ("ddr", "dmc")):
         base = Path("/sys/class/devfreq") / node
-        state[name] = {"governor": read_text(str(base / "governor")), "cur_hz": read_text(str(base / "cur_freq"))}
-    state["locked"] = all(v["governor"] in ("performance", "userspace") for v in state.values())
+        state[name] = {
+            "governor": read_text(str(base / "governor")),
+            "cur_hz": read_text(str(base / "cur_freq")),
+        }
+    state["locked"] = all(
+        v["governor"] in ("performance", "userspace") for v in state.values()
+    )
     return state
 
 
 def system_info() -> dict:
-    os_release = dict(line.split("=", 1) for line in (read_text("/etc/os-release") or "").splitlines() if "=" in line)
+    """Return kernel, OS name, Python version, RAM, and CPU count."""
+    os_release = dict(
+        line.split("=", 1)
+        for line in (read_text("/etc/os-release") or "").splitlines()
+        if "=" in line
+    )
     return {
         "kernel": platform.release(),
         "os": os_release.get("PRETTY_NAME", "").strip('"'),
@@ -72,15 +90,21 @@ def system_info() -> dict:
 
 
 class ResourceMonitor:
-    """Samples this process' VmRSS and CPU %, system CPU % and NPU temperature every `interval` s."""
+    """Sample process VmRSS/CPU, system CPU, and NPU temperature."""
 
-    def __init__(self, interval: float = 0.1):
+    def __init__(self, interval: float = 0.1) -> None:
+        """Initialize monitor with a sampling interval in seconds."""
         self.interval = interval
         self.proc = psutil.Process()
         self.zone = thermal_zone()
-        # array, not list: the samples of a long run must not be walked by the cyclic collector
-        # (the legacy camera harness measured 40 ns per list item)
-        self.rss_mib, self.proc_cpu, self.sys_cpu, self.temps = array("d"), array("d"), array("d"), array("d")
+        # array, not list: the samples of a long run must not be walked
+        # by the cyclic collector (40 ns per item in legacy harness)
+        self.rss_mib, self.proc_cpu, self.sys_cpu, self.temps = (
+            array("d"),
+            array("d"),
+            array("d"),
+            array("d"),
+        )
         self._stop = threading.Event()
         self._thread = threading.Thread(target=self._run, daemon=True)
 
@@ -88,30 +112,43 @@ class ResourceMonitor:
         self.proc.cpu_percent(None)
         psutil.cpu_percent(None)
         while not self._stop.wait(self.interval):
-            self.rss_mib.append(self.proc.memory_info().rss / 2**20)  # = VmRSS in /proc/self/status
-            self.proc_cpu.append(self.proc.cpu_percent(None))  # 100 = one full core
+            self.rss_mib.append(
+                self.proc.memory_info().rss / 2**20
+            )  # = VmRSS in /proc/self/status
+            self.proc_cpu.append(
+                self.proc.cpu_percent(None)
+            )  # 100 = one full core
             self.sys_cpu.append(psutil.cpu_percent(None))  # 100 = all cores
             temp = temperature_c(self.zone)
             if temp is not None:
                 self.temps.append(temp)
 
-    def __enter__(self):
+    def __enter__(self) -> ResourceMonitor:
+        """Start background sampling thread and record initial state."""
         self.temp_start = temperature_c(self.zone)
         self.t0 = time.perf_counter()
         self._thread.start()
         return self
 
-    def __exit__(self, *exc):
+    def __exit__(self, *exc: object) -> None:
+        """Stop background sampling thread and record final state."""
         self._stop.set()
         self._thread.join()
         self.duration_s = time.perf_counter() - self.t0
         self.temp_end = temperature_c(self.zone)
 
     def result(self) -> dict:
+        """Return aggregated resource and thermal telemetry."""
         return {
-            "peak_rss_mib": round(max(self.rss_mib), 1) if self.rss_mib else None,
-            "avg_process_cpu_pct": round(float(np.mean(self.proc_cpu)), 1) if self.proc_cpu else None,
-            "avg_system_cpu_pct": round(float(np.mean(self.sys_cpu)), 1) if self.sys_cpu else None,
+            "peak_rss_mib": round(max(self.rss_mib), 1)
+            if self.rss_mib
+            else None,
+            "avg_process_cpu_pct": round(float(np.mean(self.proc_cpu)), 1)
+            if self.proc_cpu
+            else None,
+            "avg_system_cpu_pct": round(float(np.mean(self.sys_cpu)), 1)
+            if self.sys_cpu
+            else None,
             "thermal_zone": self.zone.name if self.zone else None,
             "temp_start_c": self.temp_start,
             "temp_end_c": self.temp_end,

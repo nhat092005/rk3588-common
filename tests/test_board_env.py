@@ -1,4 +1,4 @@
-"""rk3588_common.board_env: summarize against legacy-final fixtures, the sysfs readers on files and on this machine."""
+"""Tests for rk3588_common.board_env against legacy-final fixtures."""
 
 import json
 import time
@@ -27,21 +27,33 @@ def test_read_text_and_temperature(tmp_path):
 def test_frequency_state_shape():
     state = env.frequency_state()
     assert {"npu", "ddr", "locked"} <= state.keys()
-    assert all(key.startswith("policy") for key in state.keys() - {"npu", "ddr", "locked"})
-    assert set(state["npu"]) == {"governor", "cur_hz"} and isinstance(state["locked"], bool)
+    assert all(
+        key.startswith("policy")
+        for key in state.keys() - {"npu", "ddr", "locked"}
+    )
+    assert set(state["npu"]) == {"governor", "cur_hz"}
+    assert isinstance(state["locked"], bool)
 
 
 def test_system_info_shape():
     info = env.system_info()
-    assert set(info) == {"kernel", "os", "python", "ram_total_mib", "cpu_count"}
-    assert info["ram_total_mib"] > 0 and info["cpu_count"] > 0
+    assert set(info) == {
+        "kernel",
+        "os",
+        "python",
+        "ram_total_mib",
+        "cpu_count",
+    }
+    assert info["ram_total_mib"] > 0
+    assert info["cpu_count"] > 0
 
 
 def test_resource_monitor():
     with env.ResourceMonitor(interval=0.02) as mon:
         time.sleep(0.2)
     result = mon.result()
-    assert result["samples"] > 0 and result["peak_rss_mib"] > 0
+    assert result["samples"] > 0
+    assert result["peak_rss_mib"] > 0
     assert set(result) == {
         "peak_rss_mib",
         "avg_process_cpu_pct",

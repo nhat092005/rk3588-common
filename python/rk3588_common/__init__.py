@@ -1,1 +1,4 @@
-"""Contracts shared by the PC (rk3588-ai) and the board (rk3588-deploy, ai/board). See the meta-repo STANDARDS.md."""
+"""Contracts shared by the PC and the board.
+
+Used by rk3588-ai, rk3588-deploy, and ai/board. See STANDARDS.md.
+"""

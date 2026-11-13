@@ -13,7 +13,18 @@ from rk3588_common import provenance as prov
 
 def git(path, *args):
     subprocess.run(
-        ["git", "-C", str(path), "-c", "user.name=t", "-c", "user.email=t@t", *args], check=True, capture_output=True
+        [
+            "git",
+            "-C",
+            str(path),
+            "-c",
+            "user.name=t",
+            "-c",
+            "user.email=t@t",
+            *args,
+        ],
+        check=True,
+        capture_output=True,
     )
 
 
@@ -29,7 +40,9 @@ def repo(tmp_path):
 
 
 def head(path):
-    return subprocess.check_output(["git", "-C", str(path), "rev-parse", "HEAD"], text=True).strip()
+    return subprocess.check_output(
+        ["git", "-C", str(path), "rev-parse", "HEAD"], text=True
+    ).strip()
 
 
 def test_repo_state_clean(repo):
@@ -37,11 +50,15 @@ def test_repo_state_clean(repo):
 
 
 def test_repo_state_dirty_only_inside_pathspec(repo):
-    (repo / "results.json").write_text("{}")  # generated output outside the code paths
+    (repo / "results.json").write_text(
+        "{}"
+    )  # generated output outside the code paths
     assert prov.repo_state(repo, ("code",))["dirty"] is False
     assert prov.repo_state(repo)["dirty"] is True
     (repo / "code" / "new.py").write_text("")
-    assert prov.repo_state(repo, ("code",))["dirty"] is False  # cached: state from the first call of the process
+    assert (
+        prov.repo_state(repo, ("code",))["dirty"] is False
+    )  # cached: state from the first call of the process
     prov._repo_state.cache_clear()
     assert prov.repo_state(repo, ("code",))["dirty"] is True
 
@@ -51,6 +68,10 @@ def test_repo_state_outside_git(tmp_path):
     assert prov.repo_state(tmp_path) == {"commit": "unknown", "dirty": True}
 
 
+@pytest.mark.skipif(
+    not (Path(prov.__file__).resolve().parents[2] / ".git").exists(),
+    reason="the board copy of common is not a git checkout",
+)
 def test_common_state_is_this_checkout():
     root = Path(prov.__file__).resolve().parents[2]
     state = prov.common_state()
@@ -61,21 +82,33 @@ def test_common_state_is_this_checkout():
 def test_file_sha256(tmp_path):
     data = bytes(range(256)) * 9000  # over two 1 MiB chunks
     (tmp_path / "m.rknn").write_bytes(data)
-    assert prov.file_sha256(tmp_path / "m.rknn") == hashlib.sha256(data).hexdigest()
+    assert (
+        prov.file_sha256(tmp_path / "m.rknn")
+        == hashlib.sha256(data).hexdigest()
+    )
 
 
 def test_board_provenance_round_trip(tmp_path):
     model = tmp_path / "best.rknn"
     model.write_bytes(b"model")
-    states = {"ai": {"commit": "a" * 40, "dirty": False}, "common": {"commit": "c" * 40, "dirty": True}}
+    states = {
+        "ai": {"commit": "a" * 40, "dirty": False},
+        "common": {"commit": "c" * 40, "dirty": True},
+    }
     parser = argparse.ArgumentParser()
     prov.add_provenance_args(parser)
-    argv = ["--run-id", "r0"] + [x for name, s in states.items() for x in ("--repo", prov.repo_arg(name, s))]
+    argv = ["--run-id", "r0"] + [
+        x
+        for name, s in states.items()
+        for x in ("--repo", prov.repo_arg(name, s))
+    ]
     result = prov.board_provenance(parser.parse_args(argv), model)
     assert result["repos"] == states
-    assert result["run_id"] == "r0" and result["tier"] == 2
+    assert result["run_id"] == "r0"
+    assert result["tier"] == 2
     assert result["protocol_version"] == model_io.PROTOCOL_VERSION
-    assert result["model_file"] == str(model) and result["model_sha256"] == hashlib.sha256(b"model").hexdigest()
+    assert result["model_file"] == str(model)
+    assert result["model_sha256"] == hashlib.sha256(b"model").hexdigest()
     assert list(result)[:2] == ["repos", "created_at"]
 
 
