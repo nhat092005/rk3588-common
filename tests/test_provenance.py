@@ -68,6 +68,10 @@ def test_repo_state_outside_git(tmp_path):
     assert prov.repo_state(tmp_path) == {"commit": "unknown", "dirty": True}
 
 
+@pytest.mark.skipif(
+    not (Path(prov.__file__).resolve().parents[2] / ".git").exists(),
+    reason="the board copy of common is not a git checkout",
+)
 def test_common_state_is_this_checkout():
     root = Path(prov.__file__).resolve().parents[2]
     state = prov.common_state()
