@@ -75,3 +75,22 @@ def test_constants():
     got = [io.PROTOCOL_VERSION, io.IMGSZ, io.CONF, io.IOU, io.MAX_DET, io.MAX_NMS, io.MAX_WH]
     assert np.array_equal(np.array(got, dtype=str), EXPECTED["constants"])
     assert sorted(io.IMAGE_SUFFIXES) == list(EXPECTED["suffixes"])
+
+
+@pytest.mark.parametrize(
+    ("metadata", "expected"),
+    [
+        ({"args": {"quantize": 8}}, True),
+        ({"args": {"quantize": 8}, "split_head": True}, False),
+        ({"args": {"quantize": 16}}, False),
+        ({"args": {}}, False),
+        ({}, False),
+    ],
+)
+def test_boxes_normalized(metadata, expected):
+    """Rule of legacy-final:ai/board/bench/bench_npu.py load_model and ai/core/backends.py RknnDumpBackend."""
+    assert io.boxes_normalized(metadata) is expected
+
+
+def test_eval_conf():
+    assert io.EVAL_CONF == 0.001  # legacy-final:ai/core/evaluator.py CONF and ai/board/probe/infer_dump.py EVAL_CONF

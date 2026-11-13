@@ -15,6 +15,9 @@ import numpy as np
 
 PROTOCOL_VERSION = "v1"  # evaluation protocol written into every result file
 IMGSZ = 640
+# Evaluation protocol score threshold (Ultralytics val). The board NPU dump keeps anchors above it, the PC evaluator
+# applies it, so both import it from here.
+EVAL_CONF = 0.001
 # Deployment defaults = Ultralytics predict (cfg/default.yaml: conf 0.25, iou 0.7, max_det 300,
 # multi_label=False, max_nms 30000, max_wh 7680). AI quality uses val settings (conf 0.001) on the PC instead.
 CONF = 0.25
@@ -23,6 +26,15 @@ MAX_DET = 300
 MAX_NMS = 30000
 MAX_WH = 7680
 IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".bmp"}
+
+
+def boxes_normalized(metadata: dict) -> bool:
+    """Whether an RKNN model divides its boxes by the input size, from the metadata.yaml of its export folder.
+
+    Ultralytics INT8 RKNN exports normalize boxes (engine/exporter.py _NormalizeCoords). Split-head models output
+    pixel boxes.
+    """
+    return metadata.get("args", {}).get("quantize") == 8 and not metadata.get("split_head")
 
 
 def list_images(images_dir: str | Path) -> list[Path]:
