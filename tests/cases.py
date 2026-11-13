@@ -8,6 +8,7 @@ import numpy as np
 FIXTURES = Path(__file__).resolve().parent / "fixtures"
 DUMP = FIXTURES / "model_io_dump.npz"  # first images of a real INT8 board dump, written by make_fixtures.py
 EXPECTED = FIXTURES / "model_io_expected.npz"
+BOARD_ENV_EXPECTED = FIXTURES / "board_env_expected.json"
 
 # (429, 640) and (640, 429) give a padding of 105.5 per side, where round(d - 0.1) and round(d) differ
 IMAGE_SHAPES = [(640, 640), (480, 640), (1080, 1920), (200, 300), (1000, 750), (641, 639), (429, 640), (640, 429)]
@@ -15,6 +16,11 @@ IMAGE_SHAPES = [(640, 640), (480, 640), (1080, 1920), (200, 300), (1000, 750), (
 METAS = [(1.0, 0, 0, 640, 640), (0.5, 0, 140, 1280, 720)]
 CONFS = [0.25, 0.001]
 LIST_FILES = ["b.jpg", "a.PNG", "c.jpeg", "d.bmp", "e.txt", "f.JPG", "g.webp", "h"]
+
+
+def latency_lists() -> list[list[float]]:
+    rng = np.random.default_rng(4)
+    return [[5.0], [1.0, 2.0], list(rng.gamma(4, 2.5, 1000)), list(rng.uniform(3, 30, 77))]
 
 
 def images() -> list[np.ndarray]:
