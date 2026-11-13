@@ -1,4 +1,4 @@
-"""Write the expected outputs of model_io from the legacy code at tag legacy-final.
+"""Write the expected outputs of model_io and board_env.summarize from the legacy code at tag legacy-final.
 
 Run once with the legacy interpreter, never imported by the tests:
     <legacy>/.venv/bin/python tests/make_fixtures.py <legacy>
@@ -7,6 +7,7 @@ Run once with the legacy interpreter, never imported by the tests:
 """
 
 import argparse
+import json
 import subprocess
 import sys
 import tempfile
@@ -74,7 +75,9 @@ def main() -> None:
     )
     out["suffixes"] = np.array(sorted(old.IMAGE_SUFFIXES))
     np.savez_compressed(cases.EXPECTED, **out)
-    print(f"wrote {cases.EXPECTED.name} ({len(out)} arrays) and {cases.DUMP.name}")
+    summaries = [old.summarize(values) for values in cases.latency_lists()]
+    cases.BOARD_ENV_EXPECTED.write_text(json.dumps({"summarize": summaries}, indent=1) + "\n")
+    print(f"wrote {cases.EXPECTED.name} ({len(out)} arrays), {cases.DUMP.name}, {cases.BOARD_ENV_EXPECTED.name}")
 
 
 if __name__ == "__main__":
