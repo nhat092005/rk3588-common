@@ -101,16 +101,12 @@ def test_list_images(tmp_path):
 
 
 def test_constants():
-    got = [
-        io.PROTOCOL_VERSION,
-        io.IMGSZ,
-        io.CONF,
-        io.IOU,
-        io.MAX_DET,
-        io.MAX_NMS,
-        io.MAX_WH,
-    ]
-    assert np.array_equal(np.array(got, dtype=str), EXPECTED["constants"])
+    # The legacy fixture holds protocol v1. v2 makes the input size a
+    # parameter, every other constant is unchanged.
+    got = [io.IMGSZ, io.CONF, io.IOU, io.MAX_DET, io.MAX_NMS, io.MAX_WH]
+    assert np.array_equal(np.array(got, dtype=str), EXPECTED["constants"][1:])
+    assert str(EXPECTED["constants"][0]) == "v1"
+    assert io.PROTOCOL_VERSION == "v2"
     assert sorted(io.IMAGE_SUFFIXES) == list(EXPECTED["suffixes"])
 
 
@@ -132,3 +128,32 @@ def test_boxes_normalized(metadata, expected):
 def test_eval_conf():
     # legacy-final:ai/core/evaluator.py CONF and infer_dump.py EVAL_CONF
     assert io.EVAL_CONF == 0.001
+
+
+@pytest.mark.parametrize("imgsz", [640, 960])
+def test_preprocess_imgsz(imgsz):
+    bgr = cases.images()[0]
+    x, (_, _, _, w0, h0) = io.preprocess(bgr, imgsz)
+    assert x.shape == (1, imgsz, imgsz, 3)
+    assert (w0, h0) == (bgr.shape[1], bgr.shape[0])
+
+
+def test_preprocess_default_is_640():
+    bgr = cases.images()[0]
+    assert np.array_equal(io.preprocess(bgr)[0], io.preprocess(bgr, 640)[0])
+
+
+def test_postprocess_normalized_boxes_use_imgsz():
+    # One box at the centre of the input, 0.25 x 0.5 of its size.
+    pred = np.zeros((1, 6, 1), dtype=np.float32)
+    pred[0, :4, 0] = [0.5, 0.5, 0.25, 0.5]
+    pred[0, 4, 0] = 0.9
+    for imgsz in (640, 960):
+        det = io.postprocess(
+            pred, (1.0, 0, 0, imgsz, imgsz), True, 0.25, imgsz
+        )
+        np.testing.assert_allclose(
+            det[0, :4],
+            np.array([0.375, 0.25, 0.625, 0.75]) * imgsz,
+            atol=1e-3,
+        )

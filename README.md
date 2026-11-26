@@ -19,7 +19,7 @@ Run from the meta-repo: `make check`, or `cd common && ../.venv/bin/python -m py
 
 ```json
 {"repos": {"ai": {"commit": "<sha>", "dirty": false}, "common": {"commit": "<sha>", "dirty": false}},
- "created_at": "2026-11-13T10:00:00", "run_id": "...", "tier": 2, "protocol_version": "v1",
+ "created_at": "2026-11-13T10:00:00", "run_id": "...", "tier": 2, "protocol_version": "v2",
  "model_file": "...", "model_sha256": "..."}
 ```
 
