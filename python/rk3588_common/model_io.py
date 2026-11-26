@@ -16,8 +16,11 @@ from pathlib import Path
 import cv2
 import numpy as np
 
-PROTOCOL_VERSION = "v1"  # evaluation protocol written into every result file
-IMGSZ = 640
+# Evaluation protocol written into every result file. v2: the input size
+# is a parameter of the protocol (imgsz, written into the result); v1
+# fixed it at 640, which is still the default.
+PROTOCOL_VERSION = "v2"
+IMGSZ = 640  # default input size; every function takes imgsz
 # Evaluation protocol score threshold (Ultralytics val). The board NPU
 # dump keeps anchors above it, and the PC evaluator applies it, so both
 # import it from here.
@@ -54,21 +57,23 @@ def list_images(images_dir: str | Path) -> list[Path]:
     )
 
 
-def preprocess(bgr: np.ndarray) -> tuple[np.ndarray, tuple]:
-    """Convert BGR image to (1, 640, 640, 3) uint8 RGB input."""
+def preprocess(
+    bgr: np.ndarray, imgsz: int = IMGSZ
+) -> tuple[np.ndarray, tuple]:
+    """Convert BGR image to (1, imgsz, imgsz, 3) uint8 RGB input."""
     h0, w0 = bgr.shape[:2]
-    r = IMGSZ / max(h0, w0)
+    r = imgsz / max(h0, w0)
     img = bgr
     if r != 1:  # BaseDataset.load_image(rect_mode=True)
         img = cv2.resize(
             bgr,
-            (min(math.ceil(w0 * r), IMGSZ), min(math.ceil(h0 * r), IMGSZ)),
+            (min(math.ceil(w0 * r), imgsz), min(math.ceil(h0 * r), imgsz)),
             interpolation=cv2.INTER_LINEAR,
         )
     h, w = img.shape[:2]
     # LetterBox(scaleup=False, center=True): r2 <= 1 and
     # new_unpad == (w, h) after the resize above
-    dw, dh = (IMGSZ - w) / 2, (IMGSZ - h) / 2
+    dw, dh = (imgsz - w) / 2, (imgsz - h) / 2
     top, bottom = round(dh - 0.1), round(dh + 0.1)
     left, right = round(dw - 0.1), round(dw + 0.1)
     img = cv2.copyMakeBorder(
@@ -106,14 +111,18 @@ def nms_xyxy(
 
 
 def postprocess(
-    pred: np.ndarray, meta: tuple, normalized: bool, conf_thres: float = CONF
+    pred: np.ndarray,
+    meta: tuple,
+    normalized: bool,
+    conf_thres: float = CONF,
+    imgsz: int = IMGSZ,
 ) -> np.ndarray:
     """Convert raw (1, 4 + nc, anchors) to (N, 6) pixel detections."""
     x = pred[0].T.astype(np.float32)  # (anchors, 4 + nc)
     if (
         normalized
     ):  # Ultralytics INT8 RKNN exports divide boxes by the input size
-        x[:, :4] *= IMGSZ
+        x[:, :4] *= imgsz
     scores = x[:, 4:]
     cls = scores.argmax(1)
     conf = scores[np.arange(len(cls)), cls]
@@ -146,6 +155,7 @@ def postprocess_raw(
     normalized: bool,
     split: bool = False,
     conf_thres: float = CONF,
+    imgsz: int = IMGSZ,
 ) -> np.ndarray:
     """Post-process raw RKNNLite.inference output list into detections.
 
@@ -157,9 +167,9 @@ def postprocess_raw(
         boxes = np.asarray(outs[0], dtype=np.float32)
         scores = np.asarray(outs[1], dtype=np.float32)
         return postprocess(
-            decode_split(boxes, scores), meta, False, conf_thres
+            decode_split(boxes, scores, imgsz), meta, False, conf_thres, imgsz
         )
-    return postprocess(outs[0], meta, normalized, conf_thres)
+    return postprocess(outs[0], meta, normalized, conf_thres, imgsz)
 
 
 def anchors_and_strides(
